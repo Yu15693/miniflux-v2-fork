@@ -13,12 +13,14 @@ import (
 )
 
 func doHealthCheck(healthCheckEndpoint string) {
+	// auto 模式根据监听地址推导健康检查 URL
 	if healthCheckEndpoint == "auto" {
 		healthCheckEndpoint = "http://" + config.Opts.ListenAddr()[0] + config.Opts.BasePath() + "/healthcheck"
 	}
 
 	slog.Debug("Executing health check request", slog.String("endpoint", healthCheckEndpoint))
 
+	// 发送 HTTP 请求并检查状态码
 	client := &http.Client{Timeout: 3 * time.Second}
 	resp, err := client.Get(healthCheckEndpoint)
 	if err != nil {

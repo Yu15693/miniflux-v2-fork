@@ -10,6 +10,7 @@ import (
 )
 
 func flushSessions(store *storage.Storage) {
+	// 清空所有会话，让用户重新登录
 	fmt.Println("Flushing all sessions (disconnect users)")
 	if err := store.FlushAllSessions(); err != nil {
 		printErrorAndExit(err)

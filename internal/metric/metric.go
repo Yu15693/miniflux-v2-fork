@@ -14,6 +14,7 @@ import (
 
 // Prometheus Metrics.
 var (
+	// 后台刷新订阅耗时（按成功/失败等状态打标签）
 	BackgroundFeedRefreshDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "miniflux",
@@ -24,6 +25,7 @@ var (
 		[]string{"status"},
 	)
 
+	// 内容抓取/解析耗时
 	ScraperRequestDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "miniflux",
@@ -34,6 +36,7 @@ var (
 		[]string{"status"},
 	)
 
+	// 归档条目耗时
 	ArchiveEntriesDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "miniflux",
@@ -44,6 +47,7 @@ var (
 		[]string{"status"},
 	)
 
+	// 用户总数
 	usersGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Namespace: "miniflux",
@@ -52,6 +56,7 @@ var (
 		},
 	)
 
+	// 订阅总数（按状态分组）
 	feedsGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "miniflux",
@@ -61,6 +66,7 @@ var (
 		[]string{"status"},
 	)
 
+	// 错误订阅数量
 	brokenFeedsGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Namespace: "miniflux",
@@ -69,6 +75,7 @@ var (
 		},
 	)
 
+	// 条目数量（按状态分组）
 	entriesGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "miniflux",
@@ -78,6 +85,7 @@ var (
 		[]string{"status"},
 	)
 
+	// 数据库连接统计（连接池状态）
 	dbOpenConnectionsGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Namespace: "miniflux",
@@ -143,6 +151,7 @@ type collector struct {
 
 // NewCollector initializes a new metric collector.
 func NewCollector(store *storage.Storage, refreshInterval time.Duration) *collector {
+	// 注册指标到 Prometheus 默认注册表（必须注册后才能被采集）
 	prometheus.MustRegister(BackgroundFeedRefreshDuration)
 	prometheus.MustRegister(ScraperRequestDuration)
 	prometheus.MustRegister(ArchiveEntriesDuration)
@@ -163,9 +172,11 @@ func NewCollector(store *storage.Storage, refreshInterval time.Duration) *collec
 
 // GatherStorageMetrics polls the database to fetch metrics.
 func (c *collector) GatherStorageMetrics() {
+	// 周期性拉取统计信息并写入 Gauge
 	for range time.Tick(c.refreshInterval) {
 		slog.Debug("Collecting metrics from the database")
 
+		// 用户与订阅统计
 		usersGauge.Set(float64(c.store.CountUsers()))
 		brokenFeedsGauge.Set(float64(c.store.CountAllFeedsWithErrors()))
 
@@ -174,11 +185,13 @@ func (c *collector) GatherStorageMetrics() {
 			feedsGauge.WithLabelValues(status).Set(float64(count))
 		}
 
+		// 条目统计
 		entriesCount := c.store.CountAllEntries()
 		for status, count := range entriesCount {
 			entriesGauge.WithLabelValues(status).Set(float64(count))
 		}
 
+		// 连接池统计
 		dbStats := c.store.DBStats()
 		dbOpenConnectionsGauge.Set(float64(dbStats.OpenConnections))
 		dbConnectionsInUseGauge.Set(float64(dbStats.InUse))

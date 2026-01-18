@@ -55,6 +55,7 @@ type UserCreationRequest struct {
 }
 
 // UserModificationRequest represents the request to update a user.
+// 修改请求，使用引用类型，未传空值为 nil
 type UserModificationRequest struct {
 	Username                        *string  `json:"username"`
 	Password                        *string  `json:"password"`

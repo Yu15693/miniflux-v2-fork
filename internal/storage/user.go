@@ -63,7 +63,7 @@ func (s *Storage) CreateUser(userCreationRequest *model.UserCreationRequest) (*m
 			return nil, err
 		}
 	}
-
+	// RETURNING Postgres 专用写法
 	query := `
 		INSERT INTO users
 			(username, password, is_admin, google_id, openid_connect_id)

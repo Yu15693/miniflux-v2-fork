@@ -34,6 +34,7 @@ const (
 )
 
 type configValue struct {
+	// 解析后缓存，避免重复转换（根据 valueType 使用对应字段）
 	parsedStringValue string
 	parsedBoolValue   bool
 	parsedIntValue    int
@@ -43,11 +44,13 @@ type configValue struct {
 	parsedURLValue    *url.URL
 	parsedBytesValue  []byte
 
+	// 原始值与元信息，用于解析/校验/输出
 	rawValue  string
 	valueType configValueType
 	secret    bool
 	targetKey string
 
+	// 可选校验器，基于原始字符串做规则验证
 	validator func(string) error
 }
 

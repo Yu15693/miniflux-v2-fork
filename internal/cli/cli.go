@@ -19,6 +19,7 @@ import (
 	"miniflux.app/v2/internal/version"
 )
 
+// 定义字符串常量
 const (
 	flagInfoHelp             = "Show build information"
 	flagVersionHelp          = "Show application version"
@@ -58,6 +59,7 @@ func Parse() {
 		flagExportUserFeeds      string
 	)
 
+	// CLI flags: 解析命令行选项，决定后续行为
 	flag.BoolVar(&flagInfo, "info", false, flagInfoHelp)
 	flag.BoolVar(&flagInfo, "i", false, flagInfoHelp)
 	flag.BoolVar(&flagVersion, "version", false, flagVersionHelp)
@@ -78,6 +80,8 @@ func Parse() {
 	flag.StringVar(&flagExportUserFeeds, "export-user-feeds", "", flagExportUserFeedsHelp)
 	flag.Parse()
 
+	// 读取配置：先文件，再环境变量（环境变量覆盖）
+	// 如果是读取通用格式配置文件，可以直接用 viper 库
 	cfg := config.NewConfigParser()
 
 	if flagConfigFile != "" {
@@ -92,6 +96,7 @@ func Parse() {
 		printErrorAndExit(err)
 	}
 
+	// 配置校验：OAuth2/反代认证的组合约束
 	if oauth2Provider := config.Opts.OAuth2Provider(); oauth2Provider != "" {
 		if oauth2Provider != "oidc" && oauth2Provider != "google" {
 			printErrorAndExit(fmt.Errorf(`unsupported OAuth2 provider: %q (Possible values are "google" or "oidc")`, oauth2Provider))
@@ -115,15 +120,18 @@ func Parse() {
 		}
 	}
 
+	// 仅输出配置并退出
 	if flagConfigDump {
 		fmt.Print(config.Opts)
 		return
 	}
 
+	// CLI 强制开启 debug 日志
 	if flagDebugMode {
 		config.Opts.SetLogLevel("debug")
 	}
 
+	// 日志输出：支持 stdout/stderr/文件
 	logFile := config.Opts.LogFile()
 	var logFileHandler io.Writer
 	switch logFile {
@@ -139,10 +147,12 @@ func Parse() {
 		defer logFileHandler.(*os.File).Close()
 	}
 
+	// 初始化全局 logger
 	if err := InitializeDefaultLogger(config.Opts.LogLevel(), logFileHandler, config.Opts.LogFormat(), config.Opts.LogDateTime()); err != nil {
 		printErrorAndExit(err)
 	}
 
+	// 一次性命令：健康检查/信息/版本
 	if flagHealthCheck != "" {
 		doHealthCheck(flagHealthCheck)
 		return
@@ -158,6 +168,7 @@ func Parse() {
 		return
 	}
 
+	// 启动前准备：静态资源打包 + DB 连接
 	if config.Opts.IsDefaultDatabaseURL() {
 		slog.Info("The default value for DATABASE_URL is used")
 	}
@@ -174,6 +185,7 @@ func Parse() {
 		printErrorAndExit(fmt.Errorf("unable to generate javascript bundle: %v", err))
 	}
 
+	// 建立数据库连接池
 	db, err := database.NewConnectionPool(
 		config.Opts.DatabaseURL(),
 		config.Opts.DatabaseMinConns(),
@@ -191,6 +203,7 @@ func Parse() {
 		printErrorAndExit(err)
 	}
 
+	// 一次性命令：迁移/清理/导出/管理类操作
 	if flagMigrate {
 		if err := database.Migrate(db); err != nil {
 			printErrorAndExit(err)
@@ -232,7 +245,7 @@ func Parse() {
 		return
 	}
 
-	// Run migrations and start the daemon.
+	// 常规启动：按需迁移、校验 schema，并进入守护进程
 	if config.Opts.RunMigrations() {
 		if err := database.Migrate(db); err != nil {
 			printErrorAndExit(err)
@@ -247,6 +260,7 @@ func Parse() {
 		createAdminUserFromEnvironmentVariables(store)
 	}
 
+	// 可选：初始化代理轮换器
 	if config.Opts.HasHTTPClientProxiesConfigured() {
 		slog.Info("Initializing proxy rotation", slog.Int("proxies_count", len(config.Opts.HTTPClientProxies())))
 		proxyrotator.ProxyRotatorInstance, err = proxyrotator.NewProxyRotator(config.Opts.HTTPClientProxies())
@@ -255,6 +269,7 @@ func Parse() {
 		}
 	}
 
+	// 仅执行一次性后台任务并退出
 	if flagRefreshFeeds {
 		refreshFeeds(store)
 		return
@@ -265,6 +280,7 @@ func Parse() {
 		return
 	}
 
+	// 正式启动 HTTP 服务与调度器
 	startDaemon(store)
 }
 

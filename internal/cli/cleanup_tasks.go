@@ -14,6 +14,7 @@ import (
 )
 
 func runCleanupTasks(store *storage.Storage) {
+	// 清理过期会话与归档旧文章
 	nbSessions := store.CleanOldSessions(config.Opts.CleanupRemoveSessionsInterval())
 	nbUserSessions := store.CleanOldUserSessions(config.Opts.CleanupRemoveSessionsInterval())
 	slog.Info("Sessions cleanup completed",
@@ -21,6 +22,7 @@ func runCleanupTasks(store *storage.Storage) {
 		slog.Int64("user_sessions_removed", nbUserSessions),
 	)
 
+	// 归档已读文章，并记录耗时指标
 	startTime := time.Now()
 	if rowsAffected, err := store.ArchiveEntries(model.EntryStatusRead, config.Opts.CleanupArchiveReadInterval(), config.Opts.CleanupArchiveBatchSize()); err != nil {
 		slog.Error("Unable to archive read entries", slog.Any("error", err))
@@ -34,6 +36,7 @@ func runCleanupTasks(store *storage.Storage) {
 		}
 	}
 
+	// 归档未读文章（可用于长期归档）
 	startTime = time.Now()
 	if rowsAffected, err := store.ArchiveEntries(model.EntryStatusUnread, config.Opts.CleanupArchiveUnreadInterval(), config.Opts.CleanupArchiveBatchSize()); err != nil {
 		slog.Error("Unable to archive unread entries", slog.Any("error", err))
@@ -47,6 +50,7 @@ func runCleanupTasks(store *storage.Storage) {
 		}
 	}
 
+	// 清理被删除条目的附件与正文内容
 	if enclosuresAffected, err := store.DeleteRemovedEntriesEnclosures(); err != nil {
 		slog.Error("Unable to delete enclosures from removed entries", slog.Any("error", err))
 	} else {

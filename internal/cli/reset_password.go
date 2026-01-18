@@ -13,6 +13,7 @@ import (
 )
 
 func resetPassword(store *storage.Storage) {
+	// 交互式读取用户名和新密码
 	username, password := askCredentials()
 	user, err := store.UserByUsername(username)
 	if err != nil {
@@ -26,6 +27,7 @@ func resetPassword(store *storage.Storage) {
 	userModificationRequest := &model.UserModificationRequest{
 		Password: &password,
 	}
+	// 校验密码规则并更新用户记录
 	if validationErr := validator.ValidateUserModification(store, user.ID, userModificationRequest); validationErr != nil {
 		printErrorAndExit(validationErr.Error())
 	}

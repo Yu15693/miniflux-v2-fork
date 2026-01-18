@@ -15,6 +15,7 @@ import (
 func runScheduler(store *storage.Storage, pool *worker.Pool) {
 	slog.Debug(`Starting background scheduler...`)
 
+	// 启动订阅抓取与清理任务的定时器
 	go feedScheduler(
 		store,
 		pool,
@@ -32,6 +33,7 @@ func runScheduler(store *storage.Storage, pool *worker.Pool) {
 
 func feedScheduler(store *storage.Storage, pool *worker.Pool, frequency time.Duration, batchSize, errorLimit, limitPerHost int) {
 	for range time.Tick(frequency) {
+		// 按频率生成待刷新任务并推送到 worker 池
 		// Generate a batch of feeds for any user that has feeds to refresh.
 		batchBuilder := store.NewBatchBuilder()
 		batchBuilder.WithBatchSize(batchSize)
@@ -51,6 +53,7 @@ func feedScheduler(store *storage.Storage, pool *worker.Pool, frequency time.Dur
 
 func cleanupScheduler(store *storage.Storage, frequency time.Duration) {
 	for range time.Tick(frequency) {
+		// 定时清理过期会话与归档内容
 		runCleanupTasks(store)
 	}
 }

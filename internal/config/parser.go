@@ -135,6 +135,7 @@ func (cp *configParser) parseLine(key, value string) error {
 	}
 
 	// Convert the raw value based on its type
+	// 此处有很多转换类型的样板代码
 	switch field.valueType {
 	case stringType:
 		field.parsedStringValue = parseStringValue(value, field.parsedStringValue)
@@ -305,6 +306,7 @@ func readSecretFileValue(filename string) (string, error) {
 	return value, nil
 }
 
+// 解析简单 key=value 配置文件
 func parseFileContent(r io.Reader) (lines []string) {
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {

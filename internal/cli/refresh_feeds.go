@@ -17,8 +17,10 @@ import (
 func refreshFeeds(store *storage.Storage) {
 	var wg sync.WaitGroup
 
+	// 计时：统计本次批量刷新耗时
 	startTime := time.Now()
 
+	// 1) 构建任务批次（从 DB 挑选到期、未禁用、错误次数未超限的订阅）
 	// Generate a batch of feeds for any user that has feeds to refresh.
 	batchBuilder := store.NewBatchBuilder()
 	batchBuilder.WithBatchSize(config.Opts.BatchSize())
@@ -33,11 +35,13 @@ func refreshFeeds(store *storage.Storage) {
 		return
 	}
 
+	// 2) 构建任务队列与统计
 	slog.Debug("Feed URLs in this batch", slog.Any("feed_urls", jobs.FeedURLs()))
 
 	nbJobs := len(jobs)
 	var jobQueue = make(chan model.Job, nbJobs)
 
+	// 3) 启动 worker（先起 goroutine，再投递任务）
 	slog.Info("Starting a pool of workers",
 		slog.Int("nb_workers", config.Opts.WorkerPoolSize()),
 	)
@@ -46,6 +50,7 @@ func refreshFeeds(store *storage.Storage) {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
+			// 4) Worker 持续消费队列，直到 channel 关闭
 			for job := range jobQueue {
 				slog.Info("Refreshing feed",
 					slog.Int64("feed_id", job.FeedID),
@@ -64,11 +69,13 @@ func refreshFeeds(store *storage.Storage) {
 		}(i)
 	}
 
+	// 5) 投递所有任务，并关闭队列让 worker 退出
 	for _, job := range jobs {
 		jobQueue <- job
 	}
 	close(jobQueue)
 
+	// 6) 等待全部 worker 完成，输出汇总信息
 	wg.Wait()
 
 	slog.Info("Refreshed a batch of feeds",

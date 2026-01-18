@@ -16,6 +16,7 @@ import (
 func askCredentials() (string, string) {
 	fd := int(os.Stdin.Fd())
 
+	// 仅允许在交互式终端中输入凭据
 	if !term.IsTerminal(fd) {
 		printErrorAndExit(errors.New("this is not an interactive terminal, exiting"))
 	}
@@ -27,6 +28,7 @@ func askCredentials() (string, string) {
 
 	fmt.Print("Enter Password: ")
 
+	// 读取密码时关闭回显，并在函数结束时恢复终端状态
 	state, _ := term.GetState(fd)
 	defer term.Restore(fd, state)
 	bytePassword, _ := term.ReadPassword(fd)

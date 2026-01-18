@@ -11,6 +11,7 @@ import (
 )
 
 func info() {
+	// 输出构建与运行环境信息
 	fmt.Println("Version:", version.Version)
 	fmt.Println("Commit:", version.Commit)
 	fmt.Println("Build Date:", version.BuildDate)

@@ -9,6 +9,7 @@ import (
 )
 
 func InitializeDefaultLogger(logLevel string, logFile io.Writer, logFormat string, logTime bool) error {
+	// 将字符串日志级别映射到 slog 级别
 	var programLogLevel = new(slog.LevelVar)
 	switch logLevel {
 	case "debug":
@@ -21,6 +22,7 @@ func InitializeDefaultLogger(logLevel string, logFile io.Writer, logFormat strin
 		programLogLevel.Set(slog.LevelError)
 	}
 
+	// 配置 handler：可选择隐藏时间字段
 	logHandlerOptions := &slog.HandlerOptions{Level: programLogLevel}
 	if !logTime {
 		logHandlerOptions.ReplaceAttr = func(groups []string, a slog.Attr) slog.Attr {
@@ -32,6 +34,7 @@ func InitializeDefaultLogger(logLevel string, logFile io.Writer, logFormat strin
 		}
 	}
 
+	// 根据格式选择 JSON 或文本日志
 	var logger *slog.Logger
 	switch logFormat {
 	case "json":
