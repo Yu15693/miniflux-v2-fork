@@ -39,6 +39,7 @@ const (
 )
 
 // Parse parses command line arguments.
+// MARK: 程序入口
 func Parse() {
 	var (
 		err                      error
@@ -81,6 +82,7 @@ func Parse() {
 	flag.Parse()
 
 	// 读取配置：先文件，再环境变量（环境变量覆盖）
+	// 同时给 cfg 变量、config.Opts 全局变量赋值，后续全部使用 config.Opts
 	// 如果是读取通用格式配置文件，可以直接用 viper 库
 	cfg := config.NewConfigParser()
 

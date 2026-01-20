@@ -29,6 +29,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
+// MARK: 启动 HTTP 服务器
 func StartWebServer(store *storage.Storage, pool *worker.Pool) []*http.Server {
 	listenAddresses := config.Opts.ListenAddr()
 	var httpServers []*http.Server
@@ -39,37 +40,62 @@ func StartWebServer(store *storage.Storage, pool *worker.Pool) []*http.Server {
 	var sharedAutocertTLSConfig *tls.Config
 
 	if certDomain != "" {
+		// 当配置了 certDomain 时，启用 ACME/autocert：在运行时自动签发/续期证书。
+		// 这里会做两件事：
+		// 1) 准备一份可复用的 tls.Config（后续用于真正的 HTTPS listener）
+		// 2) 启动一个独立的 HTTP（80）服务，用于处理 ACME HTTP-01 challenge
 		slog.Debug("Configuring autocert manager and shared TLS config", slog.String("domain", certDomain))
 		certManager := autocert.Manager{
-			Cache:      storage.NewCertificateCache(store),
-			Prompt:     autocert.AcceptTOS,
+			// autocert 需要一个 Cache 用来持久化证书与 ACME 相关状态；这里用数据库表 acme_cache 实现。
+			Cache: storage.NewCertificateCache(store),
+			// 自动接受 CA 的服务条款（TOS），否则签发流程会被阻断。
+			Prompt: autocert.AcceptTOS,
+			// 限制只为指定域名签发证书，避免被当成“开放代理”滥用。
 			HostPolicy: autocert.HostWhitelist(certDomain),
 		}
 
+		// 这份 tls.Config 会在后续 startAutoCertTLSServer() 中复用。
+		// GetCertificate 会在握手阶段按 SNI 动态提供证书；证书不存在或临近过期时会触发 autocert 自动获取/续期。
 		sharedAutocertTLSConfig = &tls.Config{}
 		sharedAutocertTLSConfig.GetCertificate = certManager.GetCertificate
+		// NextProtos 声明该服务支持的协议：
+		// - "h2" / "http/1.1"：正常业务的 HTTP/2、HTTP/1.1
+		// - acme.ALPNProto：允许 ACME 走 TLS-ALPN-01 challenge（某些环境下可能会用到）
 		sharedAutocertTLSConfig.NextProtos = []string{"h2", "http/1.1", acme.ALPNProto}
 
+		// ACME 的 HTTP-01 challenge 需要 CA 通过 80 端口回调校验。
+		// 这里启动一个专门的 HTTP server，Handler 由 certManager.HTTPHandler(...) 包装，
+		// 用于接管 `/.well-known/acme-challenge/` 路径并返回验证内容。
 		challengeServer := &http.Server{
 			Handler: certManager.HTTPHandler(nil),
-			Addr:    ":http",
+			// ":http" 是 Go 的端口别名，等价于 ":80"。
+			Addr: ":http",
 		}
 		slog.Info("Starting ACME HTTP challenge server for autocert", slog.String("address", challengeServer.Addr))
 		go func() {
+			// ListenAndServe 会阻塞运行；这里放到 goroutine 里，避免影响主启动流程。
+			// 正常关闭时会返回 http.ErrServerClosed，这不算异常。
 			if err := challengeServer.ListenAndServe(); err != http.ErrServerClosed {
 				slog.Error("ACME HTTP challenge server failed", slog.Any("error", err))
 			}
 		}()
+		// 启用 autocert 意味着会有 HTTPS listener；这里提前标记 HTTPS=true，供中间件/URL 生成等逻辑使用。
 		config.Opts.SetHTTPSValue(true)
+		// 将 challengeServer 纳入统一的 server 列表，便于后续统一关闭/回收资源。
 		httpServers = append(httpServers, challengeServer)
 	}
 
 	for i, listenAddr := range listenAddresses {
 		server := &http.Server{
-			ReadTimeout:  config.Opts.HTTPServerTimeout(),
+			// 限制“读取整个请求（包含请求头+请求体）”允许花的最长时间
+			ReadTimeout: config.Opts.HTTPServerTimeout(),
+			// 限制 业务处理 + 写响应 允许花的最长时间
+			// 超时后不会直接取消 handler 业务逻辑，但是写操作会失败/连接被断开，保护服务器资源
 			WriteTimeout: config.Opts.HTTPServerTimeout(),
-			IdleTimeout:  config.Opts.HTTPServerTimeout(),
-			Handler:      setupHandler(store, pool),
+			// 限制 keep-alive 连接在“空闲状态”下能保持多久（也就是处理完一个请求后，等待下一个请求的最长空闲时间）
+			// 控制长连接占用，释放不活跃连接，减少资源占用
+			IdleTimeout: config.Opts.HTTPServerTimeout(),
+			Handler:     setupHandler(store, pool),
 		}
 
 		if !strings.HasPrefix(listenAddr, "/") && os.Getenv("LISTEN_PID") != strconv.Itoa(os.Getpid()) {
@@ -203,10 +229,14 @@ func startHTTPServer(server *http.Server) {
 }
 
 func setupHandler(store *storage.Storage, pool *worker.Pool) *mux.Router {
+	// livenessProbe：存活探针，用于告诉外部探测器“进程是否还活着”。
+	// 一般只要进程能响应 HTTP 请求就返回 200，不依赖数据库等外部资源。
 	livenessProbe := func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	}
+	// readinessProbe：就绪探针，用于告诉外部探测器“服务是否已具备对外提供能力”。
+	// 这里通过 store.Ping() 检查数据库连接是否可用，失败则返回 503。
 	readinessProbe := func(w http.ResponseWriter, r *http.Request) {
 		if err := store.Ping(); err != nil {
 			http.Error(w, fmt.Sprintf("Database Connection Error: %q", err), http.StatusServiceUnavailable)
@@ -216,9 +246,11 @@ func setupHandler(store *storage.Storage, pool *worker.Pool) *mux.Router {
 		w.Write([]byte("OK"))
 	}
 
+	// 根路由器：所有路由的入口。
 	router := mux.NewRouter()
 
 	// These routes do not take the base path into consideration and are always available at the root of the server.
+	// 这组探针路由永远挂在根路径下（不受 BasePath 影响），方便容器编排/负载均衡做健康检查。
 	router.HandleFunc("/liveness", livenessProbe).Name("liveness")
 	router.HandleFunc("/healthz", livenessProbe).Name("healthz")
 	router.HandleFunc("/readiness", readinessProbe).Name("readiness")
@@ -226,21 +258,26 @@ func setupHandler(store *storage.Storage, pool *worker.Pool) *mux.Router {
 
 	var subrouter *mux.Router
 	if config.Opts.BasePath() != "" {
+		// 配置了 BasePath 时：业务路由都挂在该前缀下面（例如 /miniflux/...），探针路由仍在根路径。
 		subrouter = router.PathPrefix(config.Opts.BasePath()).Subrouter()
 	} else {
+		// 未配置 BasePath 时：业务路由直接挂在根路径。
 		subrouter = router.NewRoute().Subrouter()
 	}
 
 	if config.Opts.HasMaintenanceMode() {
+		// 维护模式：对所有业务请求直接返回维护信息，不进入后续中间件与业务路由。
 		subrouter.Use(func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Write([]byte(config.Opts.MaintenanceMessage()))
 			})
 		})
 	}
-
+	// MARK: 注册实际中间件和路由
+	// 全局中间件：目前用于注入 client_ip、记录请求日志、按需设置 HSTS 等。
 	subrouter.Use(middleware)
 
+	// 注册各模块路由（Fever/Google Reader 兼容接口、API、UI）。
 	fever.Serve(subrouter, store)
 	googlereader.Serve(subrouter, store)
 	if config.Opts.HasAPI() {
@@ -248,14 +285,18 @@ func setupHandler(store *storage.Storage, pool *worker.Pool) *mux.Router {
 	}
 	ui.Serve(subrouter, store, pool)
 
+	// 兼容历史/外部集成使用的健康检查路径（受 BasePath 影响）。
 	subrouter.HandleFunc("/healthcheck", readinessProbe).Name("healthcheck")
 
+	// 版本信息接口（受 BasePath 影响）。
 	subrouter.HandleFunc("/version", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(version.Version))
 	}).Name("version")
 
 	if config.Opts.HasMetricsCollector() {
+		// 指标采集端点：使用 promhttp 提供的 handler 生成 /metrics 输出。
 		subrouter.Handle("/metrics", promhttp.Handler()).Name("metrics")
+		// 对 /metrics 做额外访问控制：未授权时返回 404（对外隐藏该端点的存在）。
 		subrouter.Use(func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				route := mux.CurrentRoute(r)

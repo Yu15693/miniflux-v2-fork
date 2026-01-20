@@ -13,6 +13,7 @@ import (
 // Making sure that we're adhering to the autocert.Cache interface.
 var _ autocert.Cache = (*CertificateCache)(nil)
 
+// 使用 SQL 存储 ACME 证书缓存
 // CertificateCache provides a SQL backend to the autocert cache.
 type CertificateCache struct {
 	storage *Storage

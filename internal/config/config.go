@@ -5,6 +5,7 @@ package config // import "miniflux.app/v2/internal/config"
 
 import "miniflux.app/v2/internal/version"
 
+// 全局变量，存储解析后的配置选项
 // Opts holds parsed configuration options.
 var Opts *configOptions
 

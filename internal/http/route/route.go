@@ -25,7 +25,7 @@ func Path(router *mux.Router, name string, args ...any) string {
 			pairs = append(pairs, strconv.FormatInt(param, 10))
 		}
 	}
-
+	// 填充路径参数
 	result, err := route.URLPath(pairs...)
 	if err != nil {
 		panic(err)
