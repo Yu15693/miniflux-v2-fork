@@ -32,6 +32,7 @@ func middleware(next http.Handler) http.Handler {
 			slog.Debug("Incoming request",
 				slog.String("client_ip", clientIP),
 				slog.Group("request",
+					// 用了 group 后类似 request.method=GET
 					slog.String("method", r.Method),
 					slog.String("uri", r.RequestURI),
 					slog.String("protocol", r.Proto),
@@ -44,6 +45,7 @@ func middleware(next http.Handler) http.Handler {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000")
 		}
 
+		// r.WithContext 在中间件里替换 context 再传给下游
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
