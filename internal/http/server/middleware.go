@@ -15,8 +15,10 @@ import (
 
 func middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 获得并判断 Remote Client IP 是否为可信网络
 		remoteIP := request.FindRemoteIP(r)
 		isTrustedProxyClientIP := request.IsTrustedIP(remoteIP, config.Opts.TrustedReverseProxyNetworks())
+		// 获得 Real Client IP
 		clientIP := request.FindClientIP(r, isTrustedProxyClientIP)
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, request.ClientIPContextKey, clientIP)

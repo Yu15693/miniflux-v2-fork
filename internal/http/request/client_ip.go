@@ -20,6 +20,7 @@ func IsTrustedIP(remoteIP string, trustedNetworks []string) bool {
 		return false
 	}
 
+	// ip 是否属于可信网段
 	for _, cidr := range trustedNetworks {
 		_, network, err := net.ParseCIDR(cidr)
 		if err != nil {
