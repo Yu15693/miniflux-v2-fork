@@ -23,7 +23,7 @@ func ProxifyRelativeURL(router *mux.Router, mediaURL string) string {
 	if customProxyURL := config.Opts.MediaCustomProxyURL(); customProxyURL != nil {
 		return proxifyURLWithCustomProxy(mediaURL, customProxyURL)
 	}
-
+	// 签名 mediaURL，防止代理请求伪造
 	mac := hmac.New(sha256.New, config.Opts.MediaProxyPrivateKey())
 	mac.Write([]byte(mediaURL))
 	digest := mac.Sum(nil)

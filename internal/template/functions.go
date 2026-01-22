@@ -33,6 +33,10 @@ type funcMap struct {
 
 // Map returns a map of template functions that are compiled during template parsing.
 func (f *funcMap) Map() template.FuncMap {
+	// 构造并返回一份 html/template 的函数表 template.FuncMap ，让模板在“解析阶段”和“执行阶段”都能调用这些自定义函数
+	// 给模板提供通用工具函数
+	// 把“运行时环境/配置/路由器”暴露给模板
+	// 和安全/代理相关的“模板辅助”
 	return template.FuncMap{
 		"contains":         strings.Contains,
 		"csp":              csp,
@@ -286,6 +290,7 @@ func formatFileSize(b int64) string {
 	if b < unit {
 		return fmt.Sprintf("%d B", b)
 	}
+	// 换底公式计算 log_{1024}(b)
 	base := math.Log(float64(b)) / math.Log(unit)
 	number := math.Pow(unit, base-math.Floor(base))
 	return fmt.Sprintf("%.1f %ciB", number, "KMGTPE"[int64(base)-1])
