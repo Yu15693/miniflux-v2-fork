@@ -90,6 +90,7 @@ func (m *middleware) handleAppSession(next http.Handler) http.Handler {
 					return
 				}
 			} else {
+				// 允许未登录用户也有 App Session
 				slog.Debug("App session not found, creating a new one")
 				session, err = m.store.CreateAppSession()
 				if err != nil {

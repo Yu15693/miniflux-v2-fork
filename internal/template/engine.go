@@ -69,6 +69,7 @@ func (e *Engine) ParseTemplates() {
 		"webauthn_rename.html":     {"layout.html"},
 	}
 
+	// 读取并解析模版，确保依赖的模版存在
 	for name, dependencies := range templates {
 		tpl := template.New("").Funcs(funcMap)
 		for _, dependency := range dependencies {
@@ -77,6 +78,7 @@ func (e *Engine) ParseTemplates() {
 		e.templates[name] = template.Must(tpl.ParseFS(viewTemplateFiles, "templates/views/"+name))
 	}
 
+	// 确保所有 /views 文件被声明
 	// Sanity check to ensure that all templates are correctly declared in `templates`.
 	if entries, err := viewTemplateFiles.ReadDir("templates/views"); err == nil {
 		for _, entry := range entries {

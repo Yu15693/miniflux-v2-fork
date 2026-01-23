@@ -37,12 +37,14 @@ func (s *SessionData) String() string {
 	)
 }
 
+// 用于写入数据库时转换
 // Value converts the session data to JSON.
 func (s *SessionData) Value() (driver.Value, error) {
 	j, err := json.Marshal(s)
 	return j, err
 }
 
+// 用于读取数据库时转换
 // Scan converts raw JSON data.
 func (s *SessionData) Scan(src any) error {
 	source, ok := src.([]byte)
